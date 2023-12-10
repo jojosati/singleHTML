@@ -1,0 +1,863 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transformers AI v.3</title>
+	<meta property="og:title" content="Transformers AI v.3">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/css/bootstrap.css" integrity="sha512-mG7Xo6XLlQ13JGPQLgLxI7bz8QlErrsE9rYQDRgF+6AlQHm9Tn5bh/vaIKxBmM9mULPC6yizAhEmKyGgNHCIvg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body ng-app>
+  <div class="container" ng-controller="transformersCtrl">
+    <h2>
+      Transformers AI v.3
+    </h2>
+
+    <div class="row" ng-init="_show_={};">
+      <div  class="col-xs-12 col-md-6">
+        <div class="form-group">
+          <label>
+            task ({{ taskList.length - 1 }})
+            <a target="_blank" href="https://github.com/xenova/transformers.js#tasks">
+              <i class="glyphicon glyphicon-new-window"></i>
+            </a>
+          </label>
+          <select class="form-control" 
+            ng-options="item as item.label for item in taskList" 
+            ng-model="seltask"
+            ng-change="result=null; selected='';"></select>
+        </div>
+        <div class="form-group">
+          <label>
+            spec ({{ seltask.count }})
+          </label>
+          <select class="form-control" 
+            ng-options="item as item.label for item in specList | filter:{task: seltask.task||undefined }:true" 
+            ng-model="selected"
+            ng-change="initModel(selected);"></select>
+        </div>
+
+        <div ng-show="selected" class="well">
+          <div><b>task:</b>
+            <a ng-href="https://huggingface.co/models?pipeline_tag={{ selected.task }}&library=transformers.js&sort=modified" target="_blank">
+              {{ selected.task }}
+            </a>
+          </div>
+          <div><b>model:</b>           
+            <a ng-href="https://huggingface.co/{{ selected.model }}" target="_blank">
+              {{ selected.model }}
+            </a>
+          </div>
+          <div ng-show="selected.params"><b>params:</b> {{ selected.params | json }}</div>
+          <div ng-show="selected.options"><b>options:</b> {{ selected.options | json }}</div>
+          <div ng-show="selected.moreOptions"><b>moreOptions:</b> {{ selected.moreOptions | json }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">  
+      <div class="col-xs-12 col-md-10" ng-show="selected">
+
+        <div class="form-group">
+          <label>
+            <a class="btn btn-xs"
+              ng-click="_show_.model = !_show_.model"
+              >{{ _show_.model?'-' : '+' }} </a>
+            model
+            <a ng-show="_show_.model && model != selected.model" class="btn btn-xs btn-default" style="margin-left:8px"
+              ng-click="model = selected.model"
+              >default</a>
+            <a ng-hide="_show_.model" ng-href="https://huggingface.co/{{ model }}" target="_blank"
+              >{{ model }}</a>
+            </label>
+          <input ng-show="_show_.model" class="form-control" type="text" ng-model="model" />
+        </div>
+
+        <div class="form-group">
+          <label>
+            <a class="btn btn-xs"
+              ng-click="_show_.options = !_show_.options"
+              >{{ _show_.options?'-' : '+' }} </a>
+            options
+            <a ng-show="selected.options && _show_.options" 
+              class="btn btn-xs btn-default" style="margin-left:8px"
+              ng-click="options = JSON.stringify(selected.options)"
+              >default</a>
+          </label>
+          <textarea ng-show="_show_.options" class="form-control" type="text" ng-model="options"></textarea>
+          <div ng-hide="_show_.options || !options" class="text-muted">{{ options }}</div>
+        </div>
+
+        <div class="form-group" ng-show="selected.moreOptions">
+          <label>
+            <a class="btn btn-xs"
+              ng-click="_show_.moreOptions = !_show_.moreOptions"
+              >{{ _show_.options?'-' : '+' }} </a>
+            more options
+            <a ng-show="selected.moreOptions && _show_.moreOptions"
+              class="btn btn-xs btn-default" style="margin-left:8px"
+              ng-click="moreOptions = JSON.stringify(selected.moreOptions)"
+              >default</a>
+          </label>
+          <textarea ng-show="_show_.moreOptions" class="form-control" type="text" ng-model="moreOptions"></textarea>
+          <div ng-hide="_show_.moreOptions || !moreOptions" class="text-muted">{{ moreOptions }}</div>
+        </div>
+
+        <div class="form-group">
+          <label>{{ selected.src || 'text' }}
+            <a class="btn btn-xs btn-default" ng-if="selected.src=='image'"
+              onclick="document.getElementById('filePicker').click()">
+              <i class="glyphicon glyphicon-camera"></i>
+            </a>
+            <a class="btn btn-xs btn-default" ng-if="selected.src=='audio'"
+              onclick="document.getElementById('filePicker').click()">
+              <i class="glyphicon glyphicon-headphones"></i>
+            </a>
+            <span style="margin-left:8px">
+              <a ng-show="selected.sample && selected.sample != expr" class="btn btn-xs btn-default"
+                ng-click="expr = selected.sample"
+                >sample</a>
+            </span>
+            <input id="filePicker" style="display:none"
+              type="file" accept="{{ selected.src }}/*"
+              onchange="angular.element(this).scope().addFile(this)" >            
+          </label>
+          <textarea class="form-control" type="text" ng-model="expr"></textarea>
+        </div>
+        
+        <div class="form-group" ng-show="expr">
+          <button ng-show="selected && !statusText" 
+            class="btn btn-primary" 
+            ng-click="process(selected, expr, options, moreOptions, model)">
+            process
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-xs-12">
+        <div  ng-class="result && 'panel panel-default'">
+          <div ng-show="result" ng-class="result && 'panel-heading'"><b>result:</b> {{ selected.task}} [{{ model }}]</div>
+          <div ng-class="result && 'panel-body'">
+            
+            <div ng-show="result.input && false" class="well">{{ result.input }}</div>
+
+            <div class="row">
+              <div ng-show="_preview_ = (expr && (selected.src=='image' || selected.src=='audio')) || result.audio || result.images.length" 
+                class="col-xs-12 col-sm-6 col-md-4">
+                <div ng-if="selected.src=='audio' && expr" style="padding:4px;">
+                  <audio controls ng-src="{{ trustResourceUrl(expr) }}"></audio>
+                </div>
+                <div ng-if="selected.src=='image' && expr" style="padding:4px;">
+                  <img class="img-responsive" ng-src="{{ expr }}" />
+                </div>
+                <div ng-if="result.audio" style="padding:4px;">
+                  <audio controls ng-src="{{ trustResourceUrl(result.audio) }}"></audio>
+                </div>
+                <div ng-repeat="img in result.images" style="padding:4px;" ng-show="img.src">
+                  <div ng-show="img.label">
+                    <span class="label label-default">{{ img.label }}</span>
+                  </div>
+                  <img class="img-responsive" ng-src="{{ img.src }}" alt="{{ img.label }}"/>
+                </div>
+
+              </div>
+
+              <div class="col-xs-12" ng-class="_preview_ && 'col-sm-6 col-md-8'"
+                ng-if="expr == result.input">
+
+                <div class="text-warning" ng-show="statusText">
+                  {{ statusText }}
+                  <img ng-show="statusText && statusText.indexOf('..') != -1"
+                    src="https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/fancybox_loading.gif" />
+                </div>
+        
+
+                <pre ng-show="result.data" 
+                  style="margin-top:4px; text-wrap:wrap; max-height:30em;" 
+                  class="bg-info"
+                  >{{ result.data | json }}</pre>
+
+                <p ng-show="result.error"
+                  style="margin-top:4px;" 
+                  class="bg-error"
+                >{{ result.error | json }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Imported the cdn of the transformers library
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers';
+    window.transformers = {pipeline, env}
+  </script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.2.32/angular.min.js" integrity="sha512-QaPMeB0UECrUSaJoWZfBkKK2LtKphYS6HM7krY98a3einXpAooyQQOv2FNm4r+umav2dQsfBHFiHnwBZovSjpw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+  function transformersCtrl($scope, $window, $timeout, $q, $sce) {
+    $scope.specList = [
+
+      /* natural language */
+      { 
+        label: 'text unmasker',
+        task: 'fill-mask', 
+        model: 'Xenova/bert-base-cased', 
+        sample: 'The goal of life is [MASK].',
+      },
+      { 
+        label: 'text Q&A',
+        task: 'question-answering', 
+        model: 'Xenova/distilbert-base-uncased-distilled-squad', 
+        sample: 'Who was Jim Henson?',
+        options: 'Jim Henson was a nice puppet.',
+      },
+      { 
+        label: 'extractor /bert',
+        task: 'feature-extraction',
+        model: 'Xenova/bert-base-uncased',
+        sample: 'This is a simple test.',
+        options:  { pooling: 'mean', normalize: true },
+      },
+      { 
+        label: 'extractor /MiniLM',
+        task: 'feature-extraction',
+        model: 'Xenova/all-MiniLM-L6-v2',
+        params: { revision: 'default' },
+        sample: 'This is a simple test.',
+        options:  { pooling: 'mean', normalize: true },
+      },
+      { 
+        label: 'text summarizer',
+        task: 'summarization', 
+        model: 'Xenova/distilbart-cnn-6-6', 
+        sample: 'The tower is 324 metres (1,063 ft) tall, about the same height as an 81-storey building, ' +
+  'and the tallest structure in Paris. Its base is square, measuring 125 metres (410 ft) on each side. ' +
+  'During its construction, the Eiffel Tower surpassed the Washington Monument to become the tallest ' +
+  'man-made structure in the world, a title it held for 41 years until the Chrysler Building in New ' +
+  'York City was finished in 1930. It was the first structure to reach a height of 300 metres. Due to ' +
+  'the addition of a broadcasting aerial at the top of the tower in 1957, it is now taller than the ' +
+  'Chrysler Building by 5.2 metres (17 ft). Excluding transmitters, the Eiffel Tower is the second ' +
+  'tallest free-standing structure in France after the Millau Viaduct.',
+        options: { max_new_tokens: 100 },
+      },
+      { 
+        label: 'text classifier',
+        task: 'sentiment-analysis',
+        model: 'Xenova/distilbert-base-uncased-finetuned-sst-2-english',
+        sample: 'I love transformers!',
+        options: { topk: null },
+      },
+      { 
+        label: 'text reviewer',
+        task: 'sentiment-analysis', 
+        model: 'Xenova/bert-base-multilingual-uncased-sentiment', 
+        sample: 'The Shawshank Redemption is a true masterpiece of cinema.',
+      },
+      { 
+        label: 'toxic comment classifier',
+        task: 'text-classification', 
+        model: 'Xenova/toxic-bert', 
+        sample: 'I hate you!',
+        options: { topk: null },
+      },
+      { 
+        label: 'text generator',
+        task: 'text-generation', 
+        model: 'Xenova/distilgpt2', 
+        sample: 'Once upon a time, there was',
+        options: {
+          temperature: 2,
+          max_new_tokens: 10,
+          repetition_penalty: 1.5,
+          no_repeat_ngram_size: 2,
+          num_beams: 2,
+          num_return_sequences: 2,
+        },
+      },
+      { 
+        label: 'code generator',
+        task: 'text-generation', 
+        model: 'Xenova/codegen-350M-mono', 
+        sample: 'def fib(n):',
+        options: { max_new_tokens: 44 },
+      },
+      { 
+        label: 'text2text generator',
+        task: 'text2text-generation', 
+        model: 'Xenova/LaMini-Flan-T5-783M',
+        sample: 'how can I become more healthy?', 
+        options: {
+          max_new_tokens: 100,
+        },
+      },
+      { 
+        label: 'token classifier',
+        task: 'token-classification', 
+        model: 'Xenova/bert-base-NER', 
+        sample: 'My name is Sarah and I live in London',
+      },
+      { 
+        label: 'text translator /nllb',
+        task: 'translation', 
+        model: 'Xenova/nllb-200-distilled-600M',
+        sample: 'जीवन एक चॉकलेट बॉक्स की तरह है।', 
+        options: { 
+          src_lang: 'hin_Deva', 
+          // tgt_lang: 'ell_Grek'
+          tgt_lang: 'tha_Thai'
+        },
+      },
+      { 
+        label: 'text translator /m2m100',
+        task: 'translation', 
+        model: 'Xenova/m2m100_418M',
+        sample: '生活就像一盒巧克力。', 
+        options: { 
+          src_lang: 'zh', 
+          tgt_lang: 'en'
+        },
+      },
+      { 
+        label: 'text translator /mbart',
+        task: 'translation', 
+        model: 'Xenova/mbart-large-50-many-to-many-mmt',
+        sample: 'संयुक्त राष्ट्र के प्रमुख का कहना है कि सीरिया में कोई सैन्य समाधान नहीं है', 
+        options: { 
+          src_lang: 'hi_IN', 
+          tgt_lang: 'fr_XX'
+        },
+      },
+      { 
+        label: 'text zero-shot classifier /mobilebert',
+        task: 'zero-shot-classification', 
+        model: 'Xenova/mobilebert-uncased-mnli', 
+        sample: 'Last week I upgraded my iOS version and ever since then my phone has been overheating whenever I use your app.',
+        options: [ 'mobile', 'billing', 'website', 'account access' ],
+        moreOptions: { multi_label: true },
+      },
+      { 
+        label: 'text zero-shot classifier /nli-deberta',
+        task: 'zero-shot-classification', 
+        model: 'Xenova/nli-deberta-v3-xsmall', 
+        sample: 'I have a problem with my iphone that needs to be resolved asap!',
+        options: [ 'urgent', 'not urgent', 'phone', 'tablet', 'computer' ],
+        moreOptions: { multi_label: true },
+      },
+
+      /* vision */
+      { 
+        label: 'image depth estimator',
+        task: 'depth-estimation', 
+        model: 'Xenova/dpt-hybrid-midas',
+        src: 'image',
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/cats.jpg',
+      },
+      { 
+        label: 'image classifier',
+        task: 'image-classification', 
+        model: 'Xenova/vit-base-patch16-224',
+        src: 'image',
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/tiger.jpg',
+        options: { topk: 3 },
+      },
+      { 
+        label: 'image segmenter',
+        task: 'image-segmentation', 
+        model: 'Xenova/detr-resnet-50-panoptic',
+        src: 'image',
+        out: 'imagemask',
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/cats.jpg',
+      },
+      { 
+        label: 'image detector',
+        task: 'object-detection', 
+        model: 'Xenova/detr-resnet-50',
+        src: 'image',
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/cats.jpg',
+        options: {
+          threshold: 0.5,
+          percentage: true,
+        },
+      },
+      { 
+        label: 'image upscaler',
+        task: 'image-to-image', 
+        model: 'Xenova/swin2SR-classical-sr-x2-64',
+        src: 'image',
+        out: 'image',
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/butterfly.jpg',
+      },
+      
+      /* audio */
+      { 
+        label: 'audio classifier',
+        task: 'audio-classification', 
+        model:'Xenova/ast-finetuned-audioset-10-10-0.4593',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/cat_meow.wav',
+        options: { topk: 4 },
+      },
+      { 
+        label: 'audio gender classifier',
+        task: 'audio-classification', 
+        model:'Xenova/wav2vec2-large-xlsr-53-gender-recognition-librispeech',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav',
+      },
+      { 
+        label: 'speech classifier',
+        task: 'audio-classification', 
+        model:'Xenova/ast-finetuned-speech-commands-v2',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav',
+      },
+      { 
+        label: 'speech transcriber /whisper-tiny',
+        task: 'automatic-speech-recognition', 
+        model:'Xenova/whisper-tiny.en',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/ted_60.wav',
+        optionis: { chunk_length_s: 30, stride_length_s: 5 },
+      },
+      { 
+        label: 'speech transcriber /distil-medium',
+        task: 'automatic-speech-recognition', 
+        model:'distil-whisper/distil-medium.en',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav',
+      },
+      { 
+        label: 'speech transcriber /distil-large',
+        task: 'automatic-speech-recognition', 
+        model:'distil-whisper/distil-large-v2',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/jfk.wav',
+      },
+      { 
+        label: 'speech translater-transcriber /whisper-small',
+        task: 'automatic-speech-recognition', 
+        model:'Xenova/whisper-small',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/french-audio.mp3',
+        options: { language: 'french', task: 'translate' },
+      },
+      { 
+        label: 'text to speech',
+        task: 'text-to-speech', 
+        model:'Xenova/speecht5_tts',
+        params: { quantized: false },
+        out: 'audio',
+        sample: 'Hello, my dog is cute',
+        options: {
+          speaker_embeddings: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin'
+        },
+      },
+
+      /* mutimodal */
+      { 
+        label: 'image document Q&A',
+        task: 'document-question-answering', 
+        model:'Xenova/donut-base-finetuned-docvqa',
+        src: 'image',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/invoice.png',
+        options: 'What is the invoice number?',
+      },
+      { 
+        label: 'image doc recognitor',
+        task: 'image-to-text', 
+        model:'Xenova/nougat-small',
+        src: 'image',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/nougat_paper.png',
+        options: {
+          min_length: 1,
+          max_new_tokens: 40,
+        },
+        // postload: function (spec, pipe) {
+        //   spec.options.bad_words_ids = [[pipe.tokenizer.unk_token_id]]
+        // }
+      },
+      { 
+        label: 'image captioner',
+        task: 'image-to-text', 
+        model:'Xenova/vit-gpt2-image-captioning',
+        src: 'image',        
+        sample: 'https://xenova.github.io/transformers.js/images/football-match.jpg',
+        options: {
+          max_length: 16,
+          num_beams: 4,
+        },
+      },
+      { 
+        label: 'image handwritten reader',
+        task: 'image-to-text', 
+        model:'Xenova/trocr-small-handwritten',
+        src: 'image',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/handwriting.jpg',
+      },
+      { 
+        label: 'image zero-shot classifier',
+        task: 'zero-shot-image-classification', 
+        model:'Xenova/clip-vit-base-patch32',
+        src: 'image',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/tiger.jpg',
+        options: ['tiger', 'horse', 'dog'],
+      },
+      { 
+        label: 'image zero-shot detector',
+        task: 'zero-shot-object-detection', 
+        model:'Xenova/owlvit-base-patch32',
+        src: 'image',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/astronaut.png',
+        options: ['human face', 'rocket', 'helmet', 'american flag'],
+      },
+      { 
+        label: 'audio zero-shot classifier',
+        task: 'zero-shot-audio-classification', 
+        model:'Xenova/clap-htsat-unfused',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/dog_barking.wav',
+        options: ['dog', 'vaccum cleaner'],
+      },
+      { 
+        label: 'audio zero-shot classifier /music and speech',
+        task: 'zero-shot-audio-classification', 
+        model:'Xenova/larger_clap_music_and_speech',
+        src: 'audio',        
+        sample: 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/mlk.wav',
+        options: ['mlk speech', 'upbeat pop song'],
+      },
+    ]
+
+    var utils = {}
+
+    utils.fileElem = function(file, id) {
+
+      if (file && file.files)  // file may be DOM elem
+        file = file.files[id || 0]
+      return file
+    }
+
+    utils.fileRead = function (file, readmode, success, error) {
+
+      file = utils.fileElem(file)
+
+      var deferred = $q.defer()
+      var _success = function(resp){
+        deferred.resolve(resp)
+        if (success)
+          success(resp)
+      }
+
+      var _error = function(resp) {
+        deferred.reject(resp)
+        if (error)
+          error(resp)
+      }
+
+      var reader = new FileReader();
+
+      reader.onload = function(e) {
+
+        _success(reader.result)
+      }
+
+      reader.onerror = function (e) {
+        _error(reader.error)
+      }
+
+      reader[readmode || 'readAsBinaryString'](file);
+
+      return deferred.promise
+    }
+
+    utils.dataURLFileRead = function (file, success, error) {
+
+      return utils.fileRead(file, 'readAsDataURL', success, error)
+    }
+
+    utils.imageFromURL = function (url) {
+      const deferred = $q.defer();
+      const image = new Image();
+
+      image.onload = function () {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d');
+        
+        ctx.drawImage(image, 0, 0, image.width, image.height);
+        
+        // Now you can access the ImageData object
+        const imageData = ctx.getImageData(0, 0, image.width, image.height);
+        
+        deferred.resolve(imageData)
+      }
+
+      image.onerror = function () {
+        deferred.reject('image not found')
+      }
+
+      image.crossOrigin = ''
+      image.src = url;
+
+      return deferred.promise
+    }
+
+    utils.imageFromPixel = function (pixeldata) {
+
+      const width = pixeldata.width
+      const height = pixeldata.height
+      const channels = pixeldata.channels
+
+      var imageData = new ImageData(width, height)
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const index = (y * width + x) * 4;
+          const rgbindex = (y * width + x) * channels
+
+          imageData.data[index] = pixeldata.data[rgbindex]; // Red value
+          imageData.data[index + 1] = pixeldata.data[rgbindex + (1 % channels)]; // Green value
+          imageData.data[index + 2] = pixeldata.data[rgbindex + (2 % channels)]; // Blue value
+          imageData.data[index + 3] = 255; // Alpha value (default to opaque)
+
+        }
+      }
+
+      return imageData
+    }
+
+    utils.imageMask = function (img1, img2) {
+      const width1 = img1.width
+      const height1 = img1.height
+      const width2 = img2.width
+      const height2 = img2.height
+
+      if (!img1 || !img2)
+        return img1 || img2
+
+      const imageData = new ImageData(width1, height1)
+
+      for (let y = 0; y < height1; y++) {
+
+        for (let x = 0; x < width1; x++) {
+
+          const index1 = (y * width1 + x) * 4;
+
+          imageData.data[index1] = img1.data[index1]; // Red value
+          imageData.data[index1 + 1] = img1.data[index1 + 1]; // Green value
+          imageData.data[index1 + 2] = img1.data[index1 + 2]; // Blue value
+          imageData.data[index1 + 3] = img1.data[index1 + 3]; // Alpha value (default to opaque)
+
+          if (y < height2 && x < width2) {
+            const index2 = (y * width2 + x) * 4;
+
+            imageData.data[index1] &= img2.data[index2]; // Red value
+            imageData.data[index1 + 1] &= img2.data[index2 + 1]; // Green value
+            imageData.data[index1 + 2] &= img2.data[index2 + 2]; // Blue value
+          }
+        }
+      }
+
+      return imageData
+    }
+
+    utils.dataURLFromImage = function (imgdata, imgtype) {
+
+      const canvas = document.createElement('canvas')
+
+      canvas.width = imgdata.width
+      canvas.height = imgdata.height
+
+      const ctx = canvas.getContext('2d')
+      ctx.putImageData(imgdata, 0, 0)
+      return canvas.toDataURL(imgtype)
+    }
+
+    utils.dataURLfromPixel = function (pixeldata) {
+      return utils.dataURLFromImage(utils.imageFromPixel(pixeldata))
+    }
+
+    $scope.trustResourceUrl = function (url) {
+      return $sce.trustAsResourceUrl(url)
+    }
+
+    $scope.initModel = function (spec) {
+      $scope.statusText = ''
+      $scope.result = null
+      $scope.model = spec.model;
+      $scope.expr = spec.sample;
+
+      $scope.options = spec.options? JSON.stringify(spec.options) : ''
+      $scope.moreOptions = spec.moreOptions? JSON.stringify(spec.moreOptions) : ''
+    }
+
+    $scope.loadModel = function (spec, model) {
+      model = model || spec.model
+      if (!spec.executer || spec.loaded != model) {
+        $scope.statusText = `loading model [${model}]..`
+        return $window.transformers.pipeline(spec.task, model, spec.params)
+          .then(function(executer) {
+            console.debug('loaded:', model)
+            spec.loaded = model
+            spec.executer = executer
+            if (spec.postload) {
+              spec.postload(spec, executer)
+              $scope.options = spec.options? JSON.stringify(spec.options) : ''
+            }
+
+            $scope.statusText = ''
+            $scope.$digest()
+            return executer
+          }, function (err){
+            $scope.statusText = `error loading: ${err}`
+            $scope.$digest()
+          })
+      }
+
+      return $q.when(spec.executer)
+    }
+
+    $scope.addFile = function (elem, type) {
+
+      angular.forEach(elem.files, function (file) {
+
+        if (!file)
+          return;
+
+        if (type && file.type.indexOf(type)==-1)
+          return;
+
+        utils.dataURLFileRead(file).then(function(url){
+
+          if (!url)
+            return
+
+          $scope.expr = url
+          $scope.result = null
+        })
+      })
+    }
+
+    $scope.process = function (spec, nval, options, moreOptions, model) {
+
+      $scope.result = {
+        input: nval
+      }
+
+      if (spec && nval) {
+        if (options) {
+          try {
+            options = JSON.parse(options)          
+          }
+          catch (err) {
+
+            $scope.statusText = `error options: ${err}`
+            return;
+          }
+        }
+        if (moreOptions) {
+          try {
+            moreOptions = JSON.parse(moreOptions)          
+          }
+          catch (err) {
+
+            $scope.statusText = `error moreOptions: ${err}`
+            return;
+          }
+        }
+      }
+
+      $scope.loadModel(spec, model)
+      .then(function(executer) {
+
+        if (!executer)
+          return $q.reject('invalid model!');
+
+
+        return $timeout(function (){
+            $scope.statusText = `processing [${spec.label}]..`
+            $scope.$digest()
+            // My slow CPU, give a while for the DOM update before extensively processing
+            return executer(nval, options || spec.options || undefined, moreOptions || undefined)
+          })
+      })
+
+      .then(function (result){
+
+        console.debug('result', result)
+
+        if (spec.out=='audio' && result.audio) {
+          var wav = new wavefile.WaveFile()
+          wav.fromScratch(1, result.sampling_rate, '32f', result.audio)
+          $scope.result.audio = wav.toDataURI()
+        }
+
+        if (spec.out=='image' && result.data) {
+          $scope.result.images = [ {src: utils.dataURLfromPixel(result)}]
+        }
+
+        if (spec.out=='imagemask' && result[0].mask) {
+          utils.imageFromURL($scope.expr).then(function (srcimg) {
+
+            return srcimg
+          }, function (err) { console.debug (err) })
+          .then(function (srcimg) {
+            $scope.result.images = result.map(function (img) {
+                var mask = img.mask
+                if (srcimg) {
+                  mask = utils.imageMask(utils.imageFromPixel(mask), srcimg)
+                }
+
+                return ({src: utils.dataURLFromImage(mask), label: img.label})
+              })
+          })
+        }
+
+        $scope.result.data = result
+      }, function (err) {
+        
+        $scope.result.error = err
+      })
+
+      .finally(function (){
+        $scope.statusText = ''
+        $scope.$digest()
+      })
+    
+    }
+
+    // generate taskList from specList
+    $scope.taskList = [
+      {label: `_all_ (${$scope.specList.length})`, count: $scope.specList.length, task: ''}
+    ]
+
+    var _t = []
+    $scope.specList.forEach(function (sp) {
+      if (_t.indexOf(sp.task)==-1) {
+        _t.push(sp.task)
+
+        var count = $scope.specList.filter(function(_) { return (_.task == sp.task) }).length
+        
+        $scope.taskList.push({
+          label: `${sp.task} (${count})`,
+          count: count,
+          task: sp.task,
+        })
+      }
+    })
+    $scope.taskList.sort(function(a, b) { return a.task.localeCompare(b.task) })
+    $scope.seltask = $scope.taskList[0]
+
+  }
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/wavefile"></script>
+
+</body>
+</html>
